@@ -2,6 +2,10 @@
 .DS_Store
 Thumbs.db
 
+# Android / Gradle
+local.properties
+.gradle/
+
 # Editors / IDE
 .idea/
 .vscode/

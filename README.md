@@ -1,7 +1,30 @@
 # Calendo
 
-项目代码仓库。
+日历与待办结合的 Android 应用（Jetpack Compose）。单日视图采用纵向时间轴（类似 Time Blocks），行程块支持「普通日程」与「待办日程」：待办带勾选框，完成后标题显示删除线。
 
-## 开发说明
+## 运行方式
 
-本地克隆后安装依赖（待补充），按项目文档进行开发与测试。
+1. 安装 [Android Studio](https://developer.android.com/studio)，并在 SDK Manager 中安装 **Android SDK Platform 35** 与 **Build-Tools**。
+2. 在本目录创建 `local.properties`（Android Studio 首次打开工程会自动生成），例如 macOS：
+
+   ```properties
+   sdk.dir=/Users/你的用户名/Library/Android/sdk
+   ```
+
+3. 用 Android Studio 打开本仓库根目录，等待 Gradle Sync 完成后选择设备或模拟器，点击 **Run**。
+
+或在终端执行（需已配置 SDK）：
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+产品手稿参考：`docs/wireframe-day-view.jpg`。
+
+## 当前原型功能
+
+- **日**：7:00–23:00 时间轴，示例数据对应手稿日期 `2026年3月21日`。
+- **空白格**：点击某个小时区域新建日程（默认时长 1 小时，可在表单里改）。
+- **普通日程**：无勾选框，标题过长时省略号截断。
+- **待办日程**：勾选完成 → 标题删除线；顶部 **待办** 芯片可只看待办块。
+- **周 / 月**：占位页，后续迭代补充。
