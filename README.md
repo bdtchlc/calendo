@@ -19,6 +19,12 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
    sdk.dir=/Users/你的用户名/Library/Android/sdk
    ```
 
+   若使用 Homebrew 安装的 `android-commandlinetools`，SDK 根目录通常为：
+
+   ```properties
+   sdk.dir=/opt/homebrew/share/android-commandlinetools
+   ```
+
 3. 用 Android Studio 打开本仓库根目录，等待 Gradle Sync 完成后选择设备或模拟器，点击 **Run**。
 
 或在终端执行（需已配置 SDK）：
