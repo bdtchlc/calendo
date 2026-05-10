@@ -3,6 +3,7 @@ package com.calendo.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calendo.app.data.CalendarItem
 import com.calendo.app.ui.CalendoViewModel
+import com.calendo.app.ui.components.EventEditorSheet
+import com.calendo.app.ui.components.TaskDetailBottomSheet
 import com.calendo.app.ui.theme.colorsForPaletteIndex
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -43,10 +48,10 @@ private val DayFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日", 
 @Composable
 fun TasksRoute(
     vm: CalendoViewModel,
-    onJumpToHome: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    var detailItem by remember { mutableStateOf<CalendarItem?>(null) }
     val today = LocalDate.now()
     val pending = remember(state.items) {
         state.items.filter { it.isTodo && !it.completed }
@@ -58,21 +63,25 @@ fun TasksRoute(
     }
     val todayPending = pending.filter { it.date == today }
     val upcoming = pending.filter { it.date.isAfter(today) }
+    val resolvedDetail = remember(detailItem, state.items) {
+        detailItem?.let { d -> state.items.find { it.id == d.id } ?: d }
+    }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        TopAppBar(
-            title = {
-                Text("任务", fontWeight = FontWeight.SemiBold)
-            },
-        )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Column(Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = {
+                    Text("任务", fontWeight = FontWeight.SemiBold)
+                },
+            )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
             if (rolled.isNotEmpty()) {
                 item {
                     SectionTitle("逾期未办 · 滚雪球")
@@ -82,10 +91,7 @@ fun TasksRoute(
                         item = item,
                         accentSnowball = true,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
-                        onOpenDay = {
-                            vm.setSelectedDate(item.date)
-                            onJumpToHome()
-                        },
+                        onOpenDetail = { detailItem = item },
                     )
                 }
                 item { HorizontalDivider() }
@@ -97,10 +103,7 @@ fun TasksRoute(
                         item = item,
                         accentSnowball = false,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
-                        onOpenDay = {
-                            vm.setSelectedDate(today)
-                            onJumpToHome()
-                        },
+                        onOpenDetail = { detailItem = item },
                     )
                 }
                 item { HorizontalDivider() }
@@ -112,10 +115,7 @@ fun TasksRoute(
                         item = item,
                         accentSnowball = false,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
-                        onOpenDay = {
-                            vm.setSelectedDate(item.date)
-                            onJumpToHome()
-                        },
+                        onOpenDetail = { detailItem = item },
                     )
                 }
             }
@@ -129,7 +129,19 @@ fun TasksRoute(
                     )
                 }
             }
+            }
         }
+
+        TaskDetailBottomSheet(
+            item = resolvedDetail,
+            onDismiss = { detailItem = null },
+            onEdit = { item ->
+                vm.openEventEditor(EventEditorSheet.Edit(item))
+            },
+            onToggleCompleted = { item ->
+                vm.toggleTodoCompleted(item.id)
+            },
+        )
     }
 }
 
@@ -148,7 +160,7 @@ private fun TaskRow(
     item: CalendarItem,
     accentSnowball: Boolean,
     onToggle: () -> Unit,
-    onOpenDay: () -> Unit,
+    onOpenDetail: () -> Unit,
 ) {
     val c = colorsForPaletteIndex(item.paletteIndex)
     val strike = item.completed
@@ -164,7 +176,7 @@ private fun TaskRow(
         modifier = Modifier
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
-            .clickable { onOpenDay() },
+            .clickable { onOpenDetail() },
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

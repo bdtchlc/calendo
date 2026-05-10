@@ -2,6 +2,7 @@ package com.calendo.app.ui
 
 import androidx.lifecycle.ViewModel
 import com.calendo.app.data.CalendarItem
+import com.calendo.app.ui.components.EventEditorSheet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,8 @@ enum class CalendarSurfaceMode {
 }
 
 data class CalendoUiState(
+    /** 全局新建/编辑日程底栏（任意 Tab 可打开）。 */
+    val eventEditor: EventEditorSheet = EventEditorSheet.Hidden,
     /** 当前聚焦日期（日视图滑动、日历点选会更新）。 */
     val selectedDate: LocalDate = LocalDate.now(),
     /** 「日历」Tab 内周 / 月切换。 */
@@ -35,6 +38,14 @@ class CalendoViewModel : ViewModel() {
 
     fun setSelectedDate(date: LocalDate) {
         _state.update { it.copy(selectedDate = date) }
+    }
+
+    fun openEventEditor(sheet: EventEditorSheet) {
+        _state.update { it.copy(eventEditor = sheet) }
+    }
+
+    fun dismissEventEditor() {
+        _state.update { it.copy(eventEditor = EventEditorSheet.Hidden) }
     }
 
     fun setCalendarSurfaceMode(mode: CalendarSurfaceMode) {
@@ -140,6 +151,7 @@ private fun sampleItems(): List<CalendarItem> {
             participants = listOf("何叔", "银姐"),
             paletteIndex = 2,
             priority = "P0",
+            description = "同步本周项目进度与风险项。",
         ),
     )
 }

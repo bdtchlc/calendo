@@ -5,6 +5,10 @@
 
     <queries>
         <package android:name="com.google.android.gms" />
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="vnd.android.cursor.dir/contact" />
+        </intent>
     </queries>
 
     <application

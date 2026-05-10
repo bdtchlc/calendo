@@ -21,4 +21,6 @@ data class CalendarItem(
     val participants: List<String> = emptyList(),
     val paletteIndex: Int = 0,
     val priority: String? = null,
+    /** 详情描述（多行备注）。 */
+    val description: String = "",
 )

@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.calendo.app.ui.CalendoViewModel
+import com.calendo.app.ui.components.EventEditorBottomSheet
 import com.calendo.app.ui.screens.CalendarRoute
 import com.calendo.app.ui.screens.DayRoute
 import com.calendo.app.ui.screens.ProfileRoute
@@ -55,6 +57,7 @@ private enum class MainTab(
 fun CalendoRoot() {
     val navController = rememberNavController()
     val vm: CalendoViewModel = viewModel()
+    val uiState by vm.state.collectAsStateWithLifecycle()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
@@ -113,24 +116,20 @@ fun CalendoRoot() {
                         CalendarRoute(vm = vm)
                     }
                     composable(MainTab.Tasks.route) {
-                        TasksRoute(
-                            vm = vm,
-                            onJumpToHome = {
-                                navController.navigate(MainTab.Home.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                        )
+                        TasksRoute(vm = vm)
                     }
                     composable(MainTab.Profile.route) {
                         ProfileRoute(vm = vm)
                     }
                 }
             }
+
+            EventEditorBottomSheet(
+                state = uiState.eventEditor,
+                onDismiss = vm::dismissEventEditor,
+                onSave = vm::addOrUpdateItem,
+                onDelete = vm::deleteItem,
+            )
         }
     }
 }

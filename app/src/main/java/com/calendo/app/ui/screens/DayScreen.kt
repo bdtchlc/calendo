@@ -24,10 +24,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,7 +35,6 @@ import com.calendo.app.data.CalendarItem
 import com.calendo.app.ui.CalendoPagerDefaults
 import com.calendo.app.ui.CalendoUiState
 import com.calendo.app.ui.CalendoViewModel
-import com.calendo.app.ui.components.EventEditorBottomSheet
 import com.calendo.app.ui.components.EventEditorSheet
 import com.calendo.app.ui.components.TimelineDayView
 import com.calendo.app.ui.dateForPage
@@ -64,8 +61,7 @@ fun DayRoute(
         modifier = modifier,
         onToggleTodoFilter = vm::toggleTodoFilter,
         onToggleTodoCompleted = { item -> vm.toggleTodoCompleted(item.id) },
-        onSaveItem = vm::addOrUpdateItem,
-        onDeleteItem = vm::deleteItem,
+        onOpenEventEditor = vm::openEventEditor,
         onSyncSelectedDate = vm::setSelectedDate,
         onEventDragEnd = { item, deltaMinutes ->
             vm.rescheduleItemByDrag(item.id, deltaMinutes)
@@ -79,14 +75,11 @@ private fun DayScreen(
     state: CalendoUiState,
     onToggleTodoFilter: () -> Unit,
     onToggleTodoCompleted: (CalendarItem) -> Unit,
-    onSaveItem: (CalendarItem) -> Unit,
-    onDeleteItem: (String) -> Unit,
+    onOpenEventEditor: (EventEditorSheet) -> Unit,
     onSyncSelectedDate: (LocalDate) -> Unit,
     onEventDragEnd: (CalendarItem, deltaMinutes: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var sheet by remember { mutableStateOf<EventEditorSheet>(EventEditorSheet.Hidden) }
-
     val anchorDay = LocalDate.now()
     val initialPage = remember(state.selectedDate, anchorDay) {
         pageForDate(anchorDay, state.selectedDate).coerceIn(0, CalendoPagerDefaults.PageCount - 1)
@@ -232,13 +225,15 @@ private fun DayScreen(
                     endHour = 23,
                     hourHeight = 80.dp,
                     onBackgroundHourClick = { start ->
-                        sheet = EventEditorSheet.Create(
-                            date = pageDate,
-                            start = start,
+                        onOpenEventEditor(
+                            EventEditorSheet.Create(
+                                date = pageDate,
+                                start = start,
+                            ),
                         )
                     },
                     onEventClick = { item ->
-                        sheet = EventEditorSheet.Edit(item)
+                        onOpenEventEditor(EventEditorSheet.Edit(item))
                     },
                     onTodoToggle = onToggleTodoCompleted,
                     onEventDragEnd = onEventDragEnd,
@@ -249,11 +244,4 @@ private fun DayScreen(
             }
         }
     }
-
-    EventEditorBottomSheet(
-        state = sheet,
-        onDismiss = { sheet = EventEditorSheet.Hidden },
-        onSave = onSaveItem,
-        onDelete = onDeleteItem,
-    )
 }
