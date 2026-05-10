@@ -64,6 +64,8 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

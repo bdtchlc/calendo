@@ -1,5 +1,6 @@
 package com.calendo.app.ui.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +68,7 @@ fun EventEditorBottomSheet(
             endText = state.start.plusHours(1).format(TimeFmt),
             isTodo = false,
             participantsText = "",
+            priority = null,
         )
 
         is EventEditorSheet.Edit -> EditorFormState(
@@ -74,6 +77,7 @@ fun EventEditorBottomSheet(
             endText = state.item.end.format(TimeFmt),
             isTodo = state.item.isTodo,
             participantsText = state.item.participants.joinToString("，"),
+            priority = state.item.priority,
         )
 
         EventEditorSheet.Hidden -> error("unreachable")
@@ -114,6 +118,22 @@ fun EventEditorBottomSheet(
                 label = { Text("标题") },
                 singleLine = true,
             )
+
+            Text(text = "优先级", style = MaterialTheme.typography.labelMedium)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                listOf(null, "P0", "P1", "P2").forEach { p ->
+                    FilterChip(
+                        selected = form.priority == p,
+                        onClick = { form = form.copy(priority = p) },
+                        label = { Text(p ?: "无") },
+                    )
+                }
+            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -211,6 +231,7 @@ private data class EditorFormState(
     val endText: String,
     val isTodo: Boolean,
     val participantsText: String,
+    val priority: String?,
 )
 
 private fun parseAndBuild(
@@ -237,6 +258,8 @@ private fun parseAndBuild(
         .map { it.trim() }
         .filter { it.isNotEmpty() }
 
+    val palette = kotlin.math.abs(title.hashCode()) % com.calendo.app.ui.theme.BlockPalette.size
+
     return when (sheet) {
         is EventEditorSheet.Create -> CalendarItem(
             title = title,
@@ -246,6 +269,8 @@ private fun parseAndBuild(
             isTodo = form.isTodo,
             completed = false,
             participants = participants,
+            paletteIndex = palette,
+            priority = form.priority,
         )
 
         is EventEditorSheet.Edit -> sheet.item.copy(
@@ -255,6 +280,7 @@ private fun parseAndBuild(
             isTodo = form.isTodo,
             completed = if (form.isTodo) sheet.item.completed else false,
             participants = participants,
+            priority = form.priority,
         )
 
         EventEditorSheet.Hidden -> null

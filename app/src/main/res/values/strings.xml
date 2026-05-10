@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Calendo</string>
+    <!-- 在 Google Cloud Console 创建 OAuth 客户端（Web 应用）后填入，用于 requestIdToken；调试 SHA-1 需登记 -->
+    <string name="default_web_client_id">REPLACE_ME</string>
 </resources>
