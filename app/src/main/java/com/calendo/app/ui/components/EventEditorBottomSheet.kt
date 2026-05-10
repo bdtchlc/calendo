@@ -13,9 +13,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,10 +32,15 @@ import androidx.compose.ui.unit.dp
 import com.calendo.app.data.CalendarItem
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoUnit
 
-private val TimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private fun minuteOfDay(t: LocalTime): Int = t.hour * 60 + t.minute
+
+private fun timeFromMinuteOfDay(m: Int): LocalTime {
+    val h = (m / 60).coerceIn(0, 23)
+    val min = (m % 60).coerceIn(0, 59)
+    return LocalTime.of(h, min)
+}
 
 sealed interface EventEditorSheet {
     data object Hidden : EventEditorSheet
@@ -62,19 +67,22 @@ fun EventEditorBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val initial = when (state) {
-        is EventEditorSheet.Create -> EditorFormState(
-            title = "",
-            startText = state.start.format(TimeFmt),
-            endText = state.start.plusHours(1).format(TimeFmt),
-            isTodo = false,
-            participantsText = "",
-            priority = null,
-        )
+        is EventEditorSheet.Create -> {
+            val end = state.start.plusHours(1)
+            EditorFormState(
+                title = "",
+                startMin = minuteOfDay(state.start),
+                endMin = minuteOfDay(end),
+                isTodo = false,
+                participantsText = "",
+                priority = null,
+            )
+        }
 
         is EventEditorSheet.Edit -> EditorFormState(
             title = state.item.title,
-            startText = state.item.start.format(TimeFmt),
-            endText = state.item.end.format(TimeFmt),
+            startMin = minuteOfDay(state.item.start),
+            endMin = minuteOfDay(state.item.end),
             isTodo = state.item.isTodo,
             participantsText = state.item.participants.joinToString("，"),
             priority = state.item.priority,
@@ -135,25 +143,16 @@ fun EventEditorBottomSheet(
                 }
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value = form.startText,
-                    onValueChange = { form = form.copy(startText = it) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("开始 (HH:mm)") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = form.endText,
-                    onValueChange = { form = form.copy(endText = it) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("结束 (HH:mm)") },
-                    singleLine = true,
-                )
-            }
+            ScheduleTimeRangeSlider(
+                startMinuteOfDay = form.startMin,
+                endMinuteOfDay = form.endMin,
+                onRangeChange = { s, e ->
+                    form = form.copy(startMin = s, endMin = e)
+                },
+                dayStartHour = 7,
+                dayEndHour = 23,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -210,7 +209,7 @@ fun EventEditorBottomSheet(
                     onClick = {
                         val parsed = parseAndBuild(state, form)
                         if (parsed == null) {
-                            errorText = "请检查时间格式，并确保结束时间晚于开始时间。"
+                            errorText = "请确保结束时间晚于开始时间，且间隔至少 15 分钟。"
                         } else {
                             errorText = null
                             onSave(parsed)
@@ -227,8 +226,8 @@ fun EventEditorBottomSheet(
 
 private data class EditorFormState(
     val title: String,
-    val startText: String,
-    val endText: String,
+    val startMin: Int,
+    val endMin: Int,
     val isTodo: Boolean,
     val participantsText: String,
     val priority: String?,
@@ -241,17 +240,10 @@ private fun parseAndBuild(
     val title = form.title.trim()
     if (title.isEmpty()) return null
 
-    val start = try {
-        LocalTime.parse(form.startText.trim(), TimeFmt)
-    } catch (_: DateTimeParseException) {
-        return null
-    }
-    val end = try {
-        LocalTime.parse(form.endText.trim(), TimeFmt)
-    } catch (_: DateTimeParseException) {
-        return null
-    }
+    val start = timeFromMinuteOfDay(form.startMin)
+    val end = timeFromMinuteOfDay(form.endMin)
     if (!end.isAfter(start)) return null
+    if (ChronoUnit.MINUTES.between(start, end) < 15) return null
 
     val participants = form.participantsText
         .split(",", "，")

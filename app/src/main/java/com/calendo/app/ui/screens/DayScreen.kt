@@ -67,6 +67,9 @@ fun DayRoute(
         onSaveItem = vm::addOrUpdateItem,
         onDeleteItem = vm::deleteItem,
         onSyncSelectedDate = vm::setSelectedDate,
+        onEventDragEnd = { item, deltaMinutes ->
+            vm.rescheduleItemByDrag(item.id, deltaMinutes)
+        },
     )
 }
 
@@ -79,6 +82,7 @@ private fun DayScreen(
     onSaveItem: (CalendarItem) -> Unit,
     onDeleteItem: (String) -> Unit,
     onSyncSelectedDate: (LocalDate) -> Unit,
+    onEventDragEnd: (CalendarItem, deltaMinutes: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var sheet by remember { mutableStateOf<EventEditorSheet>(EventEditorSheet.Hidden) }
@@ -120,7 +124,7 @@ private fun DayScreen(
                     title = {
                         Column {
                             Text(
-                                text = "首页",
+                                text = "今天",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -165,7 +169,7 @@ private fun DayScreen(
                     ),
                 )
                 Text(
-                    text = "左右滑动切换日期 · 空白格新建 · 卡片可编辑",
+                    text = "左右滑动切换日期 · 空白格新建 · 长按卡片拖动调整时间 · 轻点文字编辑",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -237,6 +241,7 @@ private fun DayScreen(
                         sheet = EventEditorSheet.Edit(item)
                     },
                     onTodoToggle = onToggleTodoCompleted,
+                    onEventDragEnd = onEventDragEnd,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),

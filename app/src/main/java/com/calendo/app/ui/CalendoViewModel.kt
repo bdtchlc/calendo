@@ -67,6 +67,35 @@ class CalendoViewModel : ViewModel() {
         _state.update { s -> s.copy(items = s.items.filterNot { it.id == id }) }
     }
 
+    /**
+     * 长按拖动时间轴块后，整体平移开始/结束时间（保持时长；限制在 7:00–23:59）。
+     * [deltaMinutes] 为 15 分钟对齐后的增量。
+     */
+    fun rescheduleItemByDrag(id: String, deltaMinutes: Int) {
+        if (deltaMinutes == 0) return
+        _state.update { s ->
+            val item = s.items.find { it.id == id } ?: return@update s
+            val dur = ChronoUnit.MINUTES.between(item.start, item.end).coerceAtLeast(15)
+            val minS = LocalTime.of(7, 0)
+            val maxE = LocalTime.of(23, 59)
+            var ns = item.start.plusMinutes(deltaMinutes.toLong())
+            var ne = ns.plusMinutes(dur)
+            if (ns.isBefore(minS)) {
+                ns = minS
+                ne = ns.plusMinutes(dur)
+            }
+            if (ne.isAfter(maxE)) {
+                ne = maxE
+                ns = ne.minusMinutes(dur)
+                if (ns.isBefore(minS)) ns = minS
+            }
+            if (!ne.isAfter(ns)) return@update s
+            val updated = item.copy(start = ns, end = ne)
+            val next = s.items.filterNot { it.id == id } + updated
+            s.copy(items = next.sortedWith(compareBy({ it.date }, { it.start }, { it.end })))
+        }
+    }
+
     fun setGoogleAccount(email: String?) {
         _state.update { it.copy(googleAccountEmail = email, lastSyncHint = email?.let { "已连接：$it（日历双向同步需完成云端配置）" }) }
     }

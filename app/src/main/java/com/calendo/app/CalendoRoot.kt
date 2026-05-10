@@ -45,7 +45,7 @@ private enum class MainTab(
     val label: String,
     val icon: ImageVector,
 ) {
-    Home("home", "首页", Icons.Outlined.Home),
+    Home("home", "今天", Icons.Outlined.Home),
     Calendar("calendar", "日历", Icons.Outlined.CalendarMonth),
     Tasks("tasks", "任务", Icons.Outlined.TaskAlt),
     Profile("profile", "我的", Icons.Outlined.Person),

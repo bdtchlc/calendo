@@ -2,6 +2,7 @@ package com.calendo.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,15 +27,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.calendo.app.data.CalendarItem
 import com.calendo.app.ui.theme.TimelineGrid
 import com.calendo.app.ui.theme.colorsForPaletteIndex
@@ -56,11 +65,16 @@ fun TimelineDayView(
     onBackgroundHourClick: (LocalTime) -> Unit,
     onEventClick: (CalendarItem) -> Unit,
     onTodoToggle: (CalendarItem) -> Unit,
+    onEventDragEnd: (CalendarItem, deltaMinutes: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val minutesTotal = (endHour - startHour) * 60
     val totalHeight = hourHeight * (endHour - startHour)
+    val pxPerMinute = with(density) { hourHeight.toPx() } / 60f
+
+    var dragState by remember { mutableStateOf<Pair<String, Float>?>(null) }
 
     Row(
         modifier = modifier
@@ -125,8 +139,6 @@ fun TimelineDayView(
                     }
                 }
 
-                val pxPerMinute = with(density) { hourHeight.toPx() } / 60f
-
                 items.forEach { item ->
                     val layout = layoutEvent(item, startHour, endHour, minutesTotal) ?: return@forEach
                     val topPx = layout.startMinuteOffset * pxPerMinute
@@ -135,17 +147,53 @@ fun TimelineDayView(
                     val heightDp = with(density) { heightPx.toDp() }
                     val h = if (heightDp < 48.dp) 48.dp else heightDp
 
+                    val dragging = dragState?.first == item.id
+                    val dragDy = if (dragging) dragState!!.second else 0f
+
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 4.dp)
                             .fillMaxWidth()
                             .padding(top = topDp)
-                            .height(h),
+                            .height(h)
+                            .zIndex(if (dragging) 24f else 1f)
+                            .graphicsLayer {
+                                translationY = dragDy
+                                scaleX = if (dragging) 1.03f else 1f
+                                scaleY = if (dragging) 1.03f else 1f
+                            }
+                            .pointerInput(item.id, pxPerMinute) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        dragState = item.id to 0f
+                                    },
+                                    onDrag = { _, dragAmount ->
+                                        val cur = dragState
+                                        if (cur?.first == item.id) {
+                                            dragState = item.id to (cur.second + dragAmount.y)
+                                        }
+                                    },
+                                    onDragCancel = { dragState = null },
+                                    onDragEnd = {
+                                        val cur = dragState
+                                        dragState = null
+                                        if (cur?.first == item.id) {
+                                            val dmRaw = (cur.second / pxPerMinute).roundToInt()
+                                            val dm = (dmRaw / 15f).roundToInt() * 15
+                                            if (dm != 0) {
+                                                onEventDragEnd(item, dm)
+                                            }
+                                        }
+                                    },
+                                )
+                            },
                     ) {
                         EventCard(
                             item = item,
                             onClick = { onEventClick(item) },
                             onTodoToggle = { onTodoToggle(item) },
+                            elevated = dragging,
                         )
                     }
                 }
@@ -187,6 +235,7 @@ private fun EventCard(
     item: CalendarItem,
     onClick: () -> Unit,
     onTodoToggle: () -> Unit,
+    elevated: Boolean,
 ) {
     val shape = RoundedCornerShape(12.dp)
     val strike = item.isTodo && item.completed
@@ -195,8 +244,8 @@ private fun EventCard(
     Surface(
         shape = shape,
         color = block.fill,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+        tonalElevation = if (elevated) 6.dp else 0.dp,
+        shadowElevation = if (elevated) 10.dp else 1.dp,
         border = BorderStroke(1.dp, block.border),
         modifier = Modifier.fillMaxSize(),
     ) {
