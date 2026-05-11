@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +53,8 @@ fun TasksRoute(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var detailItem by remember { mutableStateOf<CalendarItem?>(null) }
+    var showCompletedTasks by remember { mutableStateOf(false) }
+    var snowballExpanded by remember { mutableStateOf(false) }
     val today = LocalDate.now()
     val pending = remember(state.items) {
         state.items.filter { it.isTodo && !it.completed }
@@ -63,6 +66,12 @@ fun TasksRoute(
     }
     val todayPending = pending.filter { it.date == today }
     val upcoming = pending.filter { it.date.isAfter(today) }
+    val completedTodos = remember(state.items) {
+        state.items.filter { it.isTodo && it.completed }
+            .sortedWith(
+                compareByDescending<CalendarItem> { it.date }.thenByDescending { it.start },
+            )
+    }
     val resolvedDetail = remember(detailItem, state.items) {
         detailItem?.let { d -> state.items.find { it.id == d.id } ?: d }
     }
@@ -77,6 +86,16 @@ fun TasksRoute(
                 title = {
                     Text("任务", fontWeight = FontWeight.SemiBold)
                 },
+                actions = {
+                    if (completedTodos.isNotEmpty()) {
+                        TextButton(onClick = { showCompletedTasks = !showCompletedTasks }) {
+                            Text(
+                                if (showCompletedTasks) "隐藏已完成" else "显示已完成任务",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
+                },
             )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -86,13 +105,31 @@ fun TasksRoute(
                 item {
                     SectionTitle("逾期未办 · 滚雪球")
                 }
-                items(rolled, key = { it.id }) { item ->
+                val rolledShown =
+                    if (rolled.size <= 2 || snowballExpanded) rolled else rolled.take(2)
+                items(rolledShown, key = { it.id }) { item ->
                     TaskRow(
                         item = item,
                         accentSnowball = true,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
                         onOpenDetail = { detailItem = item },
                     )
+                }
+                if (rolled.size > 2) {
+                    item {
+                        TextButton(
+                            onClick = { snowballExpanded = !snowballExpanded },
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        ) {
+                            Text(
+                                if (snowballExpanded) {
+                                    "收起"
+                                } else {
+                                    "还有 ${rolled.size - 2} 条逾期未办，展开查看"
+                                },
+                            )
+                        }
+                    }
                 }
                 item { HorizontalDivider() }
             }
@@ -111,6 +148,18 @@ fun TasksRoute(
             if (upcoming.isNotEmpty()) {
                 item { SectionTitle("即将到来") }
                 items(upcoming, key = { it.id }) { item ->
+                    TaskRow(
+                        item = item,
+                        accentSnowball = false,
+                        onToggle = { vm.toggleTodoCompleted(item.id) },
+                        onOpenDetail = { detailItem = item },
+                    )
+                }
+            }
+            if (showCompletedTasks && completedTodos.isNotEmpty()) {
+                item { HorizontalDivider() }
+                item { SectionTitle("已完成") }
+                items(completedTodos, key = { it.id }) { item ->
                     TaskRow(
                         item = item,
                         accentSnowball = false,

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -56,6 +57,81 @@ import kotlin.math.roundToInt
 
 private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+private fun timesOverlap(a: CalendarItem, b: CalendarItem): Boolean =
+    a.start.isBefore(b.end) && b.start.isBefore(a.end)
+
+private fun overlapClusters(items: List<CalendarItem>): List<List<CalendarItem>> {
+    if (items.isEmpty()) return emptyList()
+    val byId = items.associateBy { it.id }
+    val adj = items.associate { it.id to mutableSetOf<String>() }.toMutableMap()
+    for (i in items.indices) {
+        for (j in i + 1 until items.size) {
+            if (timesOverlap(items[i], items[j])) {
+                adj.getValue(items[i].id).add(items[j].id)
+                adj.getValue(items[j].id).add(items[i].id)
+            }
+        }
+    }
+    val visited = mutableSetOf<String>()
+    val clusters = mutableListOf<List<CalendarItem>>()
+    for (item in items) {
+        if (item.id in visited) continue
+        val stack = ArrayDeque<String>()
+        stack.add(item.id)
+        val comp = mutableListOf<CalendarItem>()
+        while (stack.isNotEmpty()) {
+            val id = stack.removeLast()
+            if (id in visited) continue
+            visited.add(id)
+            val node = byId[id]!!
+            comp.add(node)
+            for (nbr in adj[id].orEmpty()) {
+                if (nbr !in visited) stack.add(nbr)
+            }
+        }
+        clusters.add(comp)
+    }
+    return clusters
+}
+
+private fun maxOverlapCount(cluster: List<CalendarItem>): Int {
+    val pts = cluster.flatMap { listOf(it.start to 1, it.end to -1) }
+        .sortedWith(
+            compareBy<Pair<LocalTime, Int>> { it.first }
+                .thenBy { it.second },
+        )
+    var c = 0
+    var m = 0
+    for ((_, d) in pts) {
+        c += d
+        m = max(m, c)
+    }
+    return m.coerceAtLeast(1)
+}
+
+private fun assignColumns(cluster: List<CalendarItem>): Map<String, Pair<Int, Int>> {
+    val M = maxOverlapCount(cluster)
+    val sorted = cluster.sortedBy { it.start }
+    val lastEnd = MutableList(M) { LocalTime.MIN }
+    val result = mutableMapOf<String, Pair<Int, Int>>()
+    for (item in sorted) {
+        var col = 0
+        while (col < M && lastEnd[col].isAfter(item.start)) col++
+        if (col >= M) col = M - 1
+        lastEnd[col] = item.end
+        result[item.id] = col to M
+    }
+    return result
+}
+
+private fun placementForOverlappingDay(items: List<CalendarItem>): Map<String, Pair<Int, Int>> {
+    val map = mutableMapOf<String, Pair<Int, Int>>()
+    for (cl in overlapClusters(items)) {
+        map.putAll(assignColumns(cl))
+    }
+    return map
+}
+
 @Composable
 fun TimelineDayView(
     items: List<CalendarItem>,
@@ -82,20 +158,22 @@ fun TimelineDayView(
             .verticalScroll(rememberScrollState()),
     ) {
         Column(
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(52.dp),
         ) {
             for (hour in startHour until endHour) {
                 Box(
                     modifier = Modifier
                         .height(hourHeight)
                         .fillMaxWidth()
-                        .padding(end = 6.dp, top = 2.dp),
+                        .padding(end = 4.dp, top = 2.dp),
                     contentAlignment = Alignment.TopEnd,
                 ) {
                     Text(
                         text = "%02d:00".format(hour),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
                     )
                 }
             }
@@ -106,6 +184,14 @@ fun TimelineDayView(
                 .weight(1f)
                 .height(totalHeight),
         ) {
+            val trackWidth = maxWidth
+            val slotPlacements = remember(items, startHour, endHour, minutesTotal) {
+                val visible = items.filter {
+                    layoutEvent(it, startHour, endHour, minutesTotal) != null
+                }
+                placementForOverlappingDay(visible)
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     for (hour in startHour until endHour) {
@@ -139,8 +225,8 @@ fun TimelineDayView(
                     }
                 }
 
-                items.forEach { item ->
-                    val layout = layoutEvent(item, startHour, endHour, minutesTotal) ?: return@forEach
+                for (item in items) {
+                    val layout = layoutEvent(item, startHour, endHour, minutesTotal) ?: continue
                     val topPx = layout.startMinuteOffset * pxPerMinute
                     val heightPx = max(layout.durationMinutes, 15) * pxPerMinute
                     val topDp = with(density) { topPx.toDp() }
@@ -150,10 +236,15 @@ fun TimelineDayView(
                     val dragging = dragState?.first == item.id
                     val dragDy = if (dragging) dragState!!.second else 0f
 
+                    val place = slotPlacements[item.id] ?: (0 to 1)
+                    val col = place.first
+                    val cols = place.second
+                    val slotW = trackWidth / cols
+
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .fillMaxWidth()
+                            .offset(x = slotW * col + 4.dp)
+                            .width(slotW - 8.dp)
                             .padding(top = topDp)
                             .height(h)
                             .zIndex(if (dragging) 24f else 1f)
@@ -260,6 +351,12 @@ private fun EventCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                if (item.isTodo) {
+                    Checkbox(
+                        checked = item.completed,
+                        onCheckedChange = { onTodoToggle() },
+                    )
+                }
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -290,12 +387,6 @@ private fun EventCard(
                             color = block.onBlock,
                         )
                     }
-                }
-                if (item.isTodo) {
-                    Checkbox(
-                        checked = item.completed,
-                        onCheckedChange = { onTodoToggle() },
-                    )
                 }
             }
 

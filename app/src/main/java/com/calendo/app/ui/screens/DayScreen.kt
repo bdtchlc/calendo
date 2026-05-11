@@ -1,6 +1,7 @@
 package com.calendo.app.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +25,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +44,6 @@ import com.calendo.app.ui.pageForDate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -90,12 +91,18 @@ private fun DayScreen(
         pageCount = { CalendoPagerDefaults.PageCount },
     )
 
-    val scope = rememberCoroutineScope()
+    /** 避免：恢复 Tab / Pager 错位时，先把错误页写回 VM，覆盖日历传入的日期。 */
+    var vmDrivingPager by remember { mutableStateOf(true) }
 
     LaunchedEffect(state.selectedDate, anchorDay) {
         val target = pageForDate(anchorDay, state.selectedDate).coerceIn(0, CalendoPagerDefaults.PageCount - 1)
-        if (pagerState.currentPage != target) {
-            scope.launch { pagerState.animateScrollToPage(target) }
+        vmDrivingPager = true
+        try {
+            if (pagerState.currentPage != target) {
+                pagerState.scrollToPage(target)
+            }
+        } finally {
+            vmDrivingPager = false
         }
     }
 
@@ -105,6 +112,7 @@ private fun DayScreen(
             .map { it.first }
             .distinctUntilChanged()
             .collect { page ->
+                if (vmDrivingPager) return@collect
                 onSyncSelectedDate(dateForPage(anchorDay, page))
             }
     }
@@ -116,10 +124,16 @@ private fun DayScreen(
                 TopAppBar(
                     title = {
                         Column {
+                            val titleMain =
+                                if (state.selectedDate == anchorDay) "今天" else "回到今天"
                             Text(
-                                text = "今天",
+                                text = titleMain,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable(
+                                    enabled = titleMain == "回到今天",
+                                    onClick = { onSyncSelectedDate(LocalDate.now()) },
+                                ),
                             )
                             Row {
                                 Text(

@@ -36,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.calendo.app.ui.CalendoViewModel
+import java.time.LocalDate
 import com.calendo.app.ui.components.EventEditorBottomSheet
 import com.calendo.app.ui.screens.CalendarRoute
 import com.calendo.app.ui.screens.DayRoute
@@ -75,12 +76,16 @@ fun CalendoRoot() {
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (tab == MainTab.Home && currentRoute == MainTab.Home.route) {
+                                vm.setSelectedDate(LocalDate.now())
+                            } else {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
@@ -113,7 +118,19 @@ fun CalendoRoot() {
                         DayRoute(vm = vm)
                     }
                     composable(MainTab.Calendar.route) {
-                        CalendarRoute(vm = vm)
+                        CalendarRoute(
+                            vm = vm,
+                            onOpenDayView = { date ->
+                                vm.setSelectedDate(date)
+                                navController.navigate(MainTab.Home.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                        )
                     }
                     composable(MainTab.Tasks.route) {
                         TasksRoute(vm = vm)

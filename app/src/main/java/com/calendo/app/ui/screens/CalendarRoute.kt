@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -31,7 +32,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,9 +64,31 @@ private val MonthTitleFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy
 @Composable
 fun CalendarRoute(
     vm: CalendoViewModel,
+    onOpenDayView: (LocalDate) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    var expandedDate by remember { mutableStateOf<LocalDate?>(null) }
+
+    LaunchedEffect(state.calendarSurfaceMode) {
+        expandedDate = null
+    }
+
+    fun handleDayClick(day: LocalDate) {
+        val hasTasks = state.items.any { it.date == day }
+        if (hasTasks) {
+            if (expandedDate == day) {
+                expandedDate = null
+                onOpenDayView(day)
+            } else {
+                expandedDate = day
+            }
+        } else {
+            expandedDate = null
+            onOpenDayView(day)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -92,8 +119,9 @@ fun CalendarRoute(
         when (state.calendarSurfaceMode) {
             CalendarSurfaceMode.WEEK -> WeekStripView(
                 anchor = state.selectedDate,
+                expandedDate = expandedDate,
                 items = state.items,
-                onPickDay = vm::setSelectedDate,
+                onDayClick = { handleDayClick(it) },
                 onPrevWeek = { vm.setSelectedDate(state.selectedDate.minusWeeks(1)) },
                 onNextWeek = { vm.setSelectedDate(state.selectedDate.plusWeeks(1)) },
                 modifier = Modifier
@@ -104,8 +132,9 @@ fun CalendarRoute(
             CalendarSurfaceMode.MONTH -> MonthGridView(
                 focusMonth = YearMonth.from(state.selectedDate),
                 selectedDate = state.selectedDate,
+                expandedDate = expandedDate,
                 items = state.items,
-                onPickDay = vm::setSelectedDate,
+                onDayClick = { handleDayClick(it) },
                 onPrevMonth = {
                     val d = state.selectedDate.withDayOfMonth(1).minusMonths(1)
                     vm.setSelectedDate(d)
@@ -119,14 +148,74 @@ fun CalendarRoute(
                     .fillMaxWidth(),
             )
         }
+
+        ExpandedDayTasksPanel(
+            expandedDate = expandedDate,
+            items = state.items,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExpandedDayTasksPanel(
+    expandedDate: LocalDate?,
+    items: List<CalendarItem>,
+    modifier: Modifier = Modifier,
+) {
+    val date = expandedDate ?: return
+    val dayItems = remember(items, date) {
+        items.filter { it.date == date }.sortedWith(compareBy({ it.start }, { it.end }))
+    }
+    if (dayItems.isEmpty()) return
+
+    Surface(
+        tonalElevation = 2.dp,
+        shadowElevation = 0.dp,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "${date.monthValue}月${date.dayOfMonth}日 · ${dayItems.size} 项（再点此日在周/月视图内进入「今天」详情）",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            dayItems.take(32).forEach { item ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val c = colorsForPaletteIndex(item.paletteIndex)
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(c.border),
+                    )
+                    Text(
+                        text = "${item.start}–${item.end} · ${item.title}",
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun WeekStripView(
     anchor: LocalDate,
+    expandedDate: LocalDate?,
     items: List<CalendarItem>,
-    onPickDay: (LocalDate) -> Unit,
+    onDayClick: (LocalDate) -> Unit,
     onPrevWeek: () -> Unit,
     onNextWeek: () -> Unit,
     modifier: Modifier = Modifier,
@@ -162,14 +251,18 @@ private fun WeekStripView(
                 val day = weekStart.plusDays(i.toLong())
                 val dayItems = items.filter { it.date == day }
                 val selected = day == anchor
+                val expandedHere = expandedDate == day
                 Column(
                     modifier = Modifier
                         .width(52.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onPickDay(day) }
+                        .clickable { onDayClick(day) }
                         .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            when {
+                                expandedHere -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+                                selected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            },
                         )
                         .padding(vertical = 8.dp, horizontal = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -204,7 +297,7 @@ private fun WeekStripView(
             }
         }
         Text(
-            text = "窄屏下以色块表示日程密度；点选某一天后回到「首页」查看当日时间轴。",
+            text = "有任务的日期：首次点击展开当日列表；再次点击跳到「今天」该日。无任务日期直接进入当日时间轴。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(12.dp),
@@ -216,8 +309,9 @@ private fun WeekStripView(
 private fun MonthGridView(
     focusMonth: YearMonth,
     selectedDate: LocalDate,
+    expandedDate: LocalDate?,
     items: List<CalendarItem>,
-    onPickDay: (LocalDate) -> Unit,
+    onDayClick: (LocalDate) -> Unit,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
     modifier: Modifier = Modifier,
@@ -269,14 +363,16 @@ private fun MonthGridView(
                                 .padding(2.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(
-                                    if (day != null && day == selectedDate) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                                    } else {
-                                        Color.Transparent
+                                    when {
+                                        day != null && expandedDate == day ->
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+                                        day != null && day == selectedDate ->
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else -> Color.Transparent
                                     },
                                 )
                                 .clickable(enabled = day != null) {
-                                    if (day != null) onPickDay(day)
+                                    if (day != null) onDayClick(day)
                                 },
                             contentAlignment = Alignment.TopCenter,
                         ) {
@@ -309,7 +405,7 @@ private fun MonthGridView(
             }
         }
         Text(
-            text = "月视图以圆点密度提示当日事件数量。",
+            text = "月视图：圆点表示当日事项数量；有任务的日期可展开列表，再次点击该日进入「今天」。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(12.dp),

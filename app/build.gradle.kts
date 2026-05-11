@@ -42,6 +42,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/io.netty.versions.properties"
         }
     }
 }
@@ -56,6 +59,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -65,6 +69,11 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
     implementation("com.google.android.gms:play-services-auth:21.3.0")
+
+    implementation("com.google.api-client:google-api-client-android:2.7.2")
+    implementation("com.google.http-client:google-http-client-gson:1.45.0")
+    implementation("com.google.apis:google-api-services-calendar:v3-rev20241101-2.0.0")
+    implementation("com.google.apis:google-api-services-tasks:v1-rev20240630-2.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

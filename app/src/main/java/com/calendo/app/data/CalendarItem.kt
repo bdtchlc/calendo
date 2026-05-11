@@ -23,4 +23,8 @@ data class CalendarItem(
     val priority: String? = null,
     /** 详情描述（多行备注）。 */
     val description: String = "",
+    /** 对应 Google Calendar 事件 ID（已同步时非空）。 */
+    val googleEventId: String? = null,
+    /** 对应 Google Tasks 任务 ID（待办同步时非空）。 */
+    val googleTaskId: String? = null,
 )
