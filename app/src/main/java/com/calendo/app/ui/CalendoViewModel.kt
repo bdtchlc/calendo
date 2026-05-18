@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.calendo.app.data.CalendarItem
+import com.calendo.app.data.ItemsStore
 import com.calendo.app.sync.GoogleCalendarSyncEngine
 import com.calendo.app.sync.GoogleTasksSyncEngine
 import com.calendo.app.ui.components.EventEditorSheet
@@ -52,6 +53,13 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         restoreGoogleAccountFromSession()
+        viewModelScope.launch {
+            val ctx = getApplication<Application>().applicationContext
+            val saved = ItemsStore.load(ctx)
+            if (saved.isNotEmpty()) {
+                _state.update { it.copy(items = saved) }
+            }
+        }
     }
 
     fun restoreGoogleAccountFromSession() {
@@ -59,6 +67,14 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
         val email = account?.email
         if (email != null) {
             _state.update { it.copy(googleAccountEmail = email) }
+        }
+    }
+
+    /** 每次 items 变更后调用，将最新列表写入磁盘。 */
+    private fun persistItems() {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>().applicationContext
+            ItemsStore.save(ctx, _state.value.items)
         }
     }
 
@@ -90,6 +106,7 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
                 },
             )
         }
+        persistItems()
         if (_state.value.googleAccountEmail != null) {
             _state.value.items.find { it.id == id }
                 ?.takeIf { it.isTodo }
@@ -102,6 +119,7 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
             val next = s.items.filterNot { it.id == item.id } + item
             s.copy(items = next.sortedWith(compareBy({ it.date }, { it.start }, { it.end })))
         }
+        persistItems()
         if (_state.value.googleAccountEmail != null) {
             pushItemToGoogleAsync(item)
         }
@@ -132,6 +150,7 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
                                 },
                             )
                         }
+                        persistItems()
                     },
                     onFailure = { e ->
                         _state.update { s ->
@@ -149,6 +168,7 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
         val googleTaskId = item?.googleTaskId
         val linkedGoogle = _state.value.googleAccountEmail != null
         _state.update { s -> s.copy(items = s.items.filterNot { it.id == id }) }
+        persistItems()
         if (!linkedGoogle || item == null) return
         viewModelScope.launch {
             syncMutex.withLock {
@@ -187,12 +207,11 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
         var pushed: CalendarItem? = null
         _state.update { s ->
             val item = s.items.find { it.id == id } ?: return@update s
-            // 用整数分钟算术避免 LocalTime.plusMinutes 午夜绕回问题
             val startMins = item.start.hour * 60 + item.start.minute
             val endMins = item.end.hour * 60 + item.end.minute
             val dur = (endMins - startMins).coerceAtLeast(15)
-            val minMins = 7 * 60          // 07:00
-            val maxMins = 23 * 60 + 59    // 23:59
+            val minMins = 7 * 60
+            val maxMins = 23 * 60 + 59
             var ns = (startMins + deltaMinutes).coerceIn(minMins, maxMins - dur.coerceAtMost(maxMins - minMins))
             var ne = (ns + dur).coerceAtMost(maxMins)
             if (ne - ns < 15) {
@@ -208,8 +227,11 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
             val next = s.items.filterNot { it.id == id } + updated
             s.copy(items = next.sortedWith(compareBy({ it.date }, { it.start }, { it.end })))
         }
-        if (pushed != null && _state.value.googleAccountEmail != null) {
-            pushItemToGoogleAsync(pushed!!)
+        if (pushed != null) {
+            persistItems()
+            if (_state.value.googleAccountEmail != null) {
+                pushItemToGoogleAsync(pushed!!)
+            }
         }
     }
 
@@ -258,6 +280,7 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
                                 googleSyncInProgress = false,
                             )
                         }
+                        persistItems()
                     }
                     rCal.isFailure && rTask.isFailure ->
                         _state.update {

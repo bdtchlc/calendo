@@ -1,5 +1,6 @@
 package com.calendo.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calendo.app.data.CalendarItem
 import com.calendo.app.ui.CalendoViewModel
@@ -97,6 +100,7 @@ fun TasksRoute(
                     }
                 },
             )
+            @OptIn(ExperimentalFoundationApi::class)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -113,6 +117,7 @@ fun TasksRoute(
                         accentSnowball = true,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
                         onOpenDetail = { detailItem = item },
+                        modifier = Modifier.animateItem(),
                     )
                 }
                 if (rolled.size > 2) {
@@ -141,6 +146,7 @@ fun TasksRoute(
                         accentSnowball = false,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
                         onOpenDetail = { detailItem = item },
+                        modifier = Modifier.animateItem(),
                     )
                 }
                 item { HorizontalDivider() }
@@ -153,6 +159,7 @@ fun TasksRoute(
                         accentSnowball = false,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
                         onOpenDetail = { detailItem = item },
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
@@ -165,6 +172,7 @@ fun TasksRoute(
                         accentSnowball = false,
                         onToggle = { vm.toggleTodoCompleted(item.id) },
                         onOpenDetail = { detailItem = item },
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
@@ -210,9 +218,22 @@ private fun TaskRow(
     accentSnowball: Boolean,
     onToggle: () -> Unit,
     onOpenDetail: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val c = colorsForPaletteIndex(item.paletteIndex)
-    val strike = item.completed
+
+    // 勾选未完成任务时：先显示删除线，500ms 后再真正触发状态变更（配合 animateItem 退场动画）
+    var pendingComplete by remember(item.id) { mutableStateOf(false) }
+    val strike = item.completed || pendingComplete
+
+    LaunchedEffect(pendingComplete) {
+        if (pendingComplete) {
+            delay(500L)
+            onToggle()
+            pendingComplete = false
+        }
+    }
+
     Surface(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -222,7 +243,7 @@ private fun TaskRow(
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         },
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .clickable { onOpenDetail() },
@@ -233,8 +254,16 @@ private fun TaskRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Checkbox(
-                checked = item.completed,
-                onCheckedChange = { onToggle() },
+                checked = strike,
+                onCheckedChange = { checked ->
+                    if (!item.completed && checked) {
+                        // 未完成 → 完成：先动画再变更
+                        pendingComplete = true
+                    } else {
+                        // 已完成 → 取消完成：立即变更
+                        onToggle()
+                    }
+                },
             )
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -249,7 +278,7 @@ private fun TaskRow(
                         style = MaterialTheme.typography.titleSmall,
                         textDecoration = if (strike) TextDecoration.LineThrough else TextDecoration.None,
                         color = if (strike) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         },
