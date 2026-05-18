@@ -40,6 +40,25 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 2. 创建 **OAuth 2.0** 凭据：Android 应用（`com.calendo.app` + 你的 keystore SHA-1）+ Web 应用（将 Web 客户端 ID 写入 `default_web_client_id` 供 `requestIdToken`）。
 3. 使用存取的 `account` 与 `HttpTransport` 调用 Calendar API 做 **events.list / insert / patch / delete**，并与本地 `CalendarItem` 做映射与版本戳/同步令牌；冲突策略需产品层定稿。
 
+## 更新日志
+
+### alpha_0.1（持续迭代）
+
+#### 2026-05-19
+- **Bug fix · 时间滑块崩溃**：编辑日程时将起始时间拖过结束时间会导致应用崩溃。
+  - 根因一：Material3 `RangeSlider` 在两滑块交叉或重合时，`value.start >= value.endInclusive`，渲染轨道宽度为负，抛出 `IllegalArgumentException: width(-N) must be >= 0`。
+  - 根因二：`rescheduleItemByDrag` 使用 `LocalTime.plusMinutes` 做时间偏移，大幅拖动时跨零点绕回，产生 `start > end` 的非法 `CalendarItem`，再次编辑时触发上述崩溃。
+  - 修复：新增 `safeRange()` 确保任何时候传给滑块的区间都满足 `start < end`（最小间距 15 分钟）；拖动重排时改用整数分钟算术，彻底避免午夜绕回。
+
+#### 2026-05-11
+- **日历视图**：点击有任务的日期首次展开当日任务列表，再次点击进入「今天」日视图并定位到该日；无任务日期直接跳转日视图。
+- **Google Tasks 同步**：待办事项通过 Google Tasks API 双向同步（而非 Calendar 事件）；与 Google 字段不兼容的本地扩展字段（palette、priority、参与人、精确时段）以纯文本写入 `notes` 的 `[Calendo Meta]` 区块；冲突以 Google 服务端为准。
+- **日视图并排展示**：同一时段有多个事件时自动分列收窄并排显示；左侧时标固定 52dp 单行不断行。
+- **「今天」标题与导航**：当前日期非今天时，顶栏标题改为「回到今天」可点击跳回；底部「今天」Tab 在已选中状态下再次点击同样回到今日。
+- **任务页**：逾期滚雪球默认最多显示 2 条，超出可展开；右上角新增「显示已完成任务」按钮；待办勾选框移至标题左侧。
+- **日历点击跳转 Bug 修复**：修复从任务页切回日历页后二次点击日期跳转到错误日期的问题（Pager/VM 竞态）。
+- **同步容错**：Calendar 同步逐条推送，单条失败不影响整体；`patch 404` 自动降级为 `insert`；`400` 错误自动重试降级参数；错误信息附加 Google 响应原文便于排查。
+
 ## 设计来源
 
 - 墨刀交互稿：<https://rhin8m29.site.modao.ink>（若链接失效，以本仓库已落地界面为准）。
