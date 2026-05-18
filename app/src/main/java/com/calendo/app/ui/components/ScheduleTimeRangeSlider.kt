@@ -18,6 +18,26 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalTime
 import kotlin.math.roundToInt
 
+/**
+ * 始终返回满足 start < endInclusive（最小间距 15 分钟）且在 [rangeMin, rangeMax] 内的合法区间。
+ * 防止传给 RangeSlider 的 value 出现 start >= endInclusive 导致负宽度崩溃。
+ */
+private fun safeRange(
+    rawS: Float,
+    rawE: Float,
+    rangeMin: Float,
+    rangeMax: Float,
+): ClosedFloatingPointRange<Float> {
+    var s = rawS.coerceIn(rangeMin, rangeMax - 15f)
+    var e = rawE.coerceIn(rangeMin + 15f, rangeMax)
+    e = e.coerceAtLeast(s + 15f)
+    if (e > rangeMax) {
+        e = rangeMax
+        s = (rangeMax - 15f).coerceAtLeast(rangeMin)
+    }
+    return s..e
+}
+
 private fun localTimeFromMinuteOfDay(m: Int): LocalTime {
     val h = (m / 60).coerceIn(0, 23)
     val min = (m % 60).coerceIn(0, 59)
@@ -48,18 +68,11 @@ fun ScheduleTimeRangeSlider(
     val stepsCount = ((span / 15f).toInt() - 1).coerceAtLeast(0)
 
     var range by remember(startMinuteOfDay, endMinuteOfDay, dayStartHour, dayEndHour) {
-        val s = startMinuteOfDay.toFloat().coerceIn(rangeMin, rangeMax)
-        val e = endMinuteOfDay.toFloat().coerceIn(rangeMin, rangeMax)
-        val spanSafe = if (e > s + 14f) e else (s + 60f).coerceAtMost(rangeMax)
-        mutableStateOf(s..spanSafe)
+        mutableStateOf(safeRange(startMinuteOfDay.toFloat(), endMinuteOfDay.toFloat(), rangeMin, rangeMax))
     }
 
     LaunchedEffect(startMinuteOfDay, endMinuteOfDay) {
-        val s = startMinuteOfDay.toFloat().coerceIn(rangeMin, rangeMax)
-        val e = endMinuteOfDay.toFloat().coerceIn(rangeMin, rangeMax)
-        if (e > s + 14f) {
-            range = s..e
-        }
+        range = safeRange(startMinuteOfDay.toFloat(), endMinuteOfDay.toFloat(), rangeMin, rangeMax)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -76,18 +89,17 @@ fun ScheduleTimeRangeSlider(
         RangeSlider(
             value = range,
             onValueChange = { new ->
-                val rawStart = snap15(new.start).toFloat().coerceIn(rangeMin, rangeMax - 15f)
-                val rawEnd = snap15(new.endInclusive).toFloat().coerceIn(rangeMin, rangeMax)
-                val minDur = 15f
-                var s = rawStart
-                var e = rawEnd.coerceAtLeast(s + minDur)
-                if (e > rangeMax) {
-                    e = rangeMax
-                    s = (e - minDur).coerceAtLeast(rangeMin)
-                }
-                if (s > e - minDur) s = e - minDur
-                range = s..e
-                onRangeChange(snap15(s).coerceAtLeast(rangeMin.toInt()), snap15(e).coerceAtMost(rangeMax.toInt()))
+                // 防止两端交叉：取小值作为起始、大值作为结束
+                val lo = minOf(new.start, new.endInclusive)
+                val hi = maxOf(new.start, new.endInclusive)
+                val snappedS = snap15(lo).toFloat().coerceIn(rangeMin, rangeMax - 15f)
+                val snappedE = snap15(hi).toFloat().coerceIn(rangeMin + 15f, rangeMax)
+                val next = safeRange(snappedS, snappedE, rangeMin, rangeMax)
+                range = next
+                onRangeChange(
+                    snap15(next.start).coerceIn(rangeMin.toInt(), rangeMax.toInt()),
+                    snap15(next.endInclusive).coerceIn(rangeMin.toInt(), rangeMax.toInt()),
+                )
             },
             valueRange = rangeMin..rangeMax,
             steps = stepsCount,

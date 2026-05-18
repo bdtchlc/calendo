@@ -187,22 +187,23 @@ class CalendoViewModel(application: Application) : AndroidViewModel(application)
         var pushed: CalendarItem? = null
         _state.update { s ->
             val item = s.items.find { it.id == id } ?: return@update s
-            val dur = ChronoUnit.MINUTES.between(item.start, item.end).coerceAtLeast(15)
-            val minS = LocalTime.of(7, 0)
-            val maxE = LocalTime.of(23, 59)
-            var ns = item.start.plusMinutes(deltaMinutes.toLong())
-            var ne = ns.plusMinutes(dur)
-            if (ns.isBefore(minS)) {
-                ns = minS
-                ne = ns.plusMinutes(dur)
+            // 用整数分钟算术避免 LocalTime.plusMinutes 午夜绕回问题
+            val startMins = item.start.hour * 60 + item.start.minute
+            val endMins = item.end.hour * 60 + item.end.minute
+            val dur = (endMins - startMins).coerceAtLeast(15)
+            val minMins = 7 * 60          // 07:00
+            val maxMins = 23 * 60 + 59    // 23:59
+            var ns = (startMins + deltaMinutes).coerceIn(minMins, maxMins - dur.coerceAtMost(maxMins - minMins))
+            var ne = (ns + dur).coerceAtMost(maxMins)
+            if (ne - ns < 15) {
+                ne = maxMins
+                ns = (maxMins - dur).coerceAtLeast(minMins)
             }
-            if (ne.isAfter(maxE)) {
-                ne = maxE
-                ns = ne.minusMinutes(dur)
-                if (ns.isBefore(minS)) ns = minS
-            }
-            if (!ne.isAfter(ns)) return@update s
-            val updated = item.copy(start = ns, end = ne)
+            if (ne <= ns) return@update s
+            val updated = item.copy(
+                start = LocalTime.of(ns / 60, ns % 60),
+                end = LocalTime.of(ne / 60, ne % 60),
+            )
             pushed = updated
             val next = s.items.filterNot { it.id == id } + updated
             s.copy(items = next.sortedWith(compareBy({ it.date }, { it.start }, { it.end })))
