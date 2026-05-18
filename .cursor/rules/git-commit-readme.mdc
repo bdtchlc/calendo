@@ -1,0 +1,27 @@
+---
+description: 每次提交代码到 GitHub 时，必须同步更新 README.md 更新日志
+alwaysApply: true
+---
+
+# Git 提交必须更新 README
+
+每次向 GitHub 提交代码（`git commit` + `git push`）时，必须同时更新 `README.md` 中的 `## 更新日志` 区块，并在同一次提交或紧跟一次单独的 `docs:` 提交中推送。
+
+## 格式规范
+
+在对应日期下追加条目（日期倒序，最新在上）：
+
+```markdown
+#### YYYY-MM-DD
+- **功能/修复标题**：简要描述做了什么、为什么。
+  - 如有必要，用子条目说明技术细节或根因。
+```
+
+## 强制流程
+
+1. 完成代码改动
+2. 更新 `README.md` → `## 更新日志` 对应日期条目
+3. 将 README 与代码一起 `git add` 并提交
+4. `git push`
+
+**不允许**在没有更新 README 的情况下推送代码。
